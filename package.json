@@ -1,0 +1,54 @@
+{
+  "name": "aas-twin-mockup",
+  "version": "1.0.0",
+  "description": "AAS digital twin showcase mockup",
+  "main": "main.js",
+  "scripts": {
+    "vendor": "node scripts/vendor.js",
+    "prestart": "node scripts/vendor.js",
+    "start": "electron .",
+    "predist": "node scripts/vendor.js",
+    "dist": "electron-builder --win portable"
+  },
+  "keywords": [],
+  "author": "CHO_LAB",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.18.0",
+    "three": "^0.170.0"
+  },
+  "productName": "AAS Twin",
+  "build": {
+    "appId": "lab.cho.aastwin",
+    "productName": "AAS Twin",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "AAS-Twin-${version}-portable.exe"
+    }
+  }
+}

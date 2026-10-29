@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="solid">
+<head>
+  <meta charset="utf-8">
+  <title>AAS Twin</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'">
+  <link rel="stylesheet" href="vendor/fonts/manrope/index.css">
+  <link rel="stylesheet" href="vendor/fonts/jetbrains-mono/index.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6.5 12h11"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><rect x="6.5" y="9" width="8.5" height="8.5" rx="1.5"/><path d="M9.5 6.5h6.5a1.5 1.5 0 0 1 1.5 1.5v6.5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-solid" viewBox="0 0 24 24"><path class="f1" d="M12 3.5 19.5 7.8 12 12.1 4.5 7.8Z"/><path class="f2" d="M4.5 7.8 12 12.1v8.4l-7.5-4.3Z"/><path class="f3" d="M19.5 7.8 12 12.1v8.4l7.5-4.3Z"/></symbol>
+    <symbol id="i-wire" viewBox="0 0 24 24"><path d="M12 3.5 19.5 7.8v8.4L12 20.5l-7.5-4.3V7.8Z M4.5 7.8 12 12.1l7.5-4.3 M12 12.1v8.4"/><path class="dash" d="M12 3.5v8.4 M4.5 16.2 12 11.9l7.5 4.3"/></symbol>
+    <symbol id="i-explode" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-compose" viewBox="0 0 24 24"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></symbol>
+    <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9"/></symbol>
+    <symbol id="i-side-l" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 5v14"/></symbol>
+    <symbol id="i-side-r" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M14.5 5v14"/></symbol>
+    <symbol id="i-mark" viewBox="0 0 64 64">
+      <path fill="#E8957A" d="M32 6 32 32 9.5 19Z"/>
+      <path fill="#D97757" d="M9.5 19 32 32v26L9.5 45Z"/>
+      <path fill="none" stroke="#19F5DC" stroke-width="2.4" stroke-linejoin="round" d="M32 6 54.5 19 32 32M54.5 19v26L32 58M32 32v26"/>
+    </symbol>
+  </svg>
+
+  <div id="app" data-screen="landing">
+    <header class="topbar">
+      <div class="tb-left">
+        <button id="back" class="icon-btn" aria-label="Back" disabled><svg><use href="#i-back"/></svg></button>
+        <div class="brand"><svg class="mark"><use href="#i-mark"/></svg><span>AAS Twin</span></div>
+        <div class="crumb" id="crumb"><span class="slash">/</span><span id="crumb-file"></span></div>
+      </div>
+      <div class="tb-drag"></div>
+      <div class="tb-right">
+        <div class="seg" id="mode" role="radiogroup" aria-label="View mode">
+          <span class="seg-thumb"></span>
+          <div class="seg-hi" aria-hidden="true"></div>
+          <button role="radio" data-mode="solid" aria-checked="true"><svg><use href="#i-solid"/></svg><span>Solid</span></button>
+          <button role="radio" data-mode="wire" aria-checked="false"><svg><use href="#i-wire"/></svg><span>Wireframe</span></button>
+        </div>
+        <div class="win-ctl">
+          <button id="w-min" aria-label="Minimize"><svg><use href="#i-min"/></svg></button>
+          <button id="w-max" aria-label="Maximize"><svg><use href="#i-max"/></svg></button>
+          <button id="w-close" class="close" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas id="gl"></canvas>
+      <svg id="leaders"></svg>
+      <div id="cards"></div>
+
+      <aside class="panel left" id="panel-left">
+        <div class="panel-head">
+          <button class="panel-tog" data-panel="left" aria-label="Collapse assembly panel" aria-expanded="true"><svg><use href="#i-side-l"/></svg></button>
+          <h2>Assembly</h2><span class="count mono" id="part-count"></span>
+        </div>
+        <div class="panel-body"><div class="tree" id="tree"></div></div>
+      </aside>
+
+      <aside class="panel right" id="panel-right">
+        <div class="panel-head">
+          <h2 id="ins-title">Assembly</h2><span class="count mono" id="ins-id"></span>
+          <button class="panel-tog" data-panel="right" aria-label="Collapse inspector panel" aria-expanded="true"><svg><use href="#i-side-r"/></svg></button>
+        </div>
+        <div class="panel-body">
+        <dl class="props" id="props"></dl>
+        <div class="metric">
+          <div class="metric-head"><span>Core temperature</span><span class="mono metric-val" id="metric-val">0.0</span></div>
+          <svg class="spark" id="spark" viewBox="0 0 260 64" preserveAspectRatio="none">
+            <path class="spark-grid" d="M0 16H260M0 32H260M0 48H260"/>
+            <path class="spark-area" id="spark-area"/>
+            <path class="spark-line" id="spark-line"/>
+            <circle class="spark-dot" id="spark-dot" r="3"/>
+          </svg>
+          <div class="metric-axis mono"><span>-60 s</span><span>now</span></div>
+        </div>
+        </div>
+      </aside>
+
+      <section class="landing" id="landing">
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Load AAS model">
+          <svg class="drop-cube" viewBox="0 0 200 200" aria-hidden="true">
+            <path class="face top" d="M100 30 160.6 65 100 100 39.4 65Z"/>
+            <path class="face left" d="M39.4 65 100 100v70L39.4 135Z"/>
+            <path class="face right" d="M160.6 65 100 100v70l60.6-35Z"/>
+            <g class="edges">
+              <path pathLength="1" d="M100 30 160.6 65"/>
+              <path pathLength="1" d="M100 30 39.4 65"/>
+              <path pathLength="1" d="M39.4 65 100 100"/>
+              <path pathLength="1" d="M160.6 65 100 100"/>
+              <path pathLength="1" d="M100 100v70"/>
+              <path pathLength="1" d="M39.4 65v70"/>
+              <path pathLength="1" d="M160.6 65v70"/>
+              <path pathLength="1" d="M39.4 135 100 170"/>
+              <path pathLength="1" d="M160.6 135 100 170"/>
+            </g>
+            <path class="arrow" d="M100 -6V40M87 27l13 13 13-13"/>
+          </svg>
+          <div class="drop-idle">
+            <div class="drop-title">Drop an AAS model</div>
+            <button class="ghost-btn" id="browse" type="button">Browse</button>
+          </div>
+          <div class="drop-load">
+            <div class="drop-file" id="load-file"></div>
+            <div class="bar"><i id="load-bar"></i></div>
+            <div class="load-row"><span id="load-step"></span><span class="mono" id="load-pct">0%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="dock" id="dock">
+        <button class="dock-btn" id="explode" aria-pressed="false">
+          <span class="dock-ico"><svg class="ico-a"><use href="#i-explode"/></svg><svg class="ico-b"><use href="#i-compose"/></svg></span>
+          <span class="dock-label"><span class="la">Decompose</span><span class="lb">Compose</span></span>
+        </button>
+        <span class="dock-sep"></span>
+        <button class="dock-btn icon" id="focus" aria-label="Focus" aria-pressed="false"><svg><use href="#i-focus"/></svg></button>
+        <button class="dock-btn icon" id="reset" aria-label="Reset view"><svg><use href="#i-reset"/></svg></button>
+      </div>
+
+      <div class="toast" id="toast" role="status">
+        <div class="toast-row"><span class="toast-ico"><svg><use href="#i-check"/></svg></span><span id="toast-name"></span><span class="mono" id="toast-pct"></span></div>
+        <div class="bar"><i id="toast-bar"></i></div>
+      </div>
+
+      <div class="dropveil" id="dropveil"><div class="veil-frame"></div><div class="veil-label">Drop data</div></div>
+    </main>
+
+    <footer class="statusbar">
+      <div class="sb-group">
+        <span class="sb-item"><i class="dot" id="sb-model-dot"></i><span id="sb-model">No model</span></span>
+        <span class="sb-item"><i class="dot" id="sb-data-dot"></i><span id="sb-data">No data</span></span>
+      </div>
+      <div class="sb-group mono" id="sb-cam">
+        <span class="sb-item"><b>AZ</b><span id="sb-az">45.0&deg;</span></span>
+        <span class="sb-item"><b>EL</b><span id="sb-el">35.3&deg;</span></span>
+        <span class="sb-item"><b>ZOOM</b><span id="sb-zoom">1.00x</span></span>
+        <span class="sb-item"><b>FPS</b><span id="sb-fps">60</span></span>
+      </div>
+    </footer>
+  </div>
+
+  <canvas id="fx"></canvas>
+  <input type="file" id="file" hidden>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
