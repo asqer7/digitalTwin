@@ -152,30 +152,33 @@ svg { display: block; }
 .leader.in .halo { animation: halo 2.4s 0.6s infinite cubic-bezier(0.2, 0.7, 0.2, 1); }
 @keyframes halo { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(3.4); } }
 
-/* Glass cards: an overscanned optical surface underneath untouched text.
-   The 12px rolled bevel refracts real background detail. Its neutral normal-based
-   relief remains visible over empty space, without a painted spectrum. */
+/* Glass cards: frosted pane under untouched text.
+   The backdrop layer reads 32px beyond the card and is clipped back to its shape, so the blur
+   has real scene to sample at the edges instead of clamping. Fine lines dissolve into soft
+   color; broad shapes and hues still come through. One hairline rim, brighter toward the
+   upper left, and a compact shadow give a shallow pane. Text sits above every material layer. */
 :root {
   --lens-pad: 32px;
-  --glass-filter: blur(0.45px) saturate(1.12);
-  --glass-face: linear-gradient(160deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 42%, rgba(255,255,255,0.14));
-  --glass-depth: 0 1px 2px rgba(50,44,34,0.11), 0 12px 22px -15px rgba(50,44,34,0.35);
-  --glass-sheen: rgba(255,255,255,0.26);
-  --glass-text-shadow: 0 1px 2px rgba(255,255,255,0.92), 0 0 5px rgba(250,249,245,0.8);
-  --glass-caustic: rgba(255,255,255,0.8);
-  --glass-face-veil: rgba(247,246,241,0.27);
+  --glass-filter: blur(13px) saturate(1.25);
+  --glass-tint: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 60%), rgba(246, 244, 238, 0.6);
+  --glass-rim: linear-gradient(140deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.5) 32%, rgba(255, 255, 255, 0.28) 62%, rgba(20, 20, 19, 0.1));
+  --glass-shadow: 0 1px 2px rgba(50, 44, 34, 0.08), 0 8px 18px -10px rgba(50, 44, 34, 0.3);
+  --glass-sheen: rgba(255, 255, 255, 0.14);
+  --card-title: #141413;
+  --card-sub: #57564f;
 }
 :root[data-theme='wire'] {
-  --glass-filter: blur(0.45px) saturate(1.15);
-  --glass-face: linear-gradient(160deg, rgba(180,245,235,0.10), rgba(25,245,220,0.018) 40%, rgba(25,245,220,0.045));
-  --glass-depth: 0 1px 3px rgba(0,0,0,0.75), 0 12px 24px -14px rgba(0,0,0,0.9);
-  --glass-sheen: rgba(215,255,250,0.11);
-  --glass-text-shadow: 0 1px 3px #030606, 0 0 6px rgba(3,6,6,0.95);
-  --glass-caustic: rgba(135,255,239,0.35);
-  --glass-face-veil: rgba(2,12,12,0.32);
+  /* Lower backdrop brightness keeps bloom on nearby cyan lines from flooding the pane. */
+  --glass-filter: blur(13px) saturate(0.85) brightness(0.8);
+  --glass-tint: linear-gradient(180deg, rgba(190, 235, 228, 0.07), rgba(190, 235, 228, 0) 60%), rgba(16, 32, 32, 0.34);
+  --glass-rim: linear-gradient(140deg, rgba(205, 250, 243, 0.5), rgba(170, 225, 216, 0.2) 32%, rgba(150, 205, 196, 0.1) 62%, rgba(150, 205, 196, 0.06));
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 22px -12px rgba(0, 0, 0, 0.85);
+  --glass-sheen: rgba(215, 255, 250, 0.05);
+  --card-title: #eef6f4;
+  --card-sub: rgba(214, 232, 228, 0.74);
 }
-:root.lens { --glass-filter: blur(0.3px) url(#lens) blur(0.4px); }
-:root.lens[data-theme='wire'] { --glass-filter: blur(0.3px) url(#lens-wire) blur(0.4px); }
+:root.lens { --glass-filter: blur(13px) saturate(1.25) url(#lens); }
+:root.lens[data-theme='wire'] { --glass-filter: blur(13px) saturate(0.85) brightness(0.8) url(#lens); }
 
 .card { position: absolute; left: 0; top: 0; width: 214px; pointer-events: none; will-change: transform; }
 .glass {
@@ -191,44 +194,35 @@ svg { display: block; }
 .card.in .glass { transform: none; }
 .card.in .glass:hover { transform: translateY(-2px) scale(1.03); }
 .card.in .glass:active { transform: scale(0.97); transition-duration: 0.12s; }
-/* Opacity belongs to the filtering element itself, not an ancestor: an
-   ancestor opacity below 1 would become a backdrop root during the entrance. */
+/* Opacity belongs to each layer, not an ancestor: an ancestor opacity below 1
+   would become a backdrop root and cut the pane off from the scene. */
 .lens-backdrop, .lens-face, .glass::before, .glass::after, .card-t, .card-s {
   opacity: var(--pane-opacity); transition: opacity 0.35s;
 }
 .lens-window { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 0; }
-.lens-backdrop {
-  position: absolute; inset: calc(-1 * var(--lens-pad));
-  backdrop-filter: var(--glass-filter);
-}
+.lens-backdrop { position: absolute; inset: calc(-1 * var(--lens-pad)); backdrop-filter: var(--glass-filter); }
 .lens-face {
   position: absolute; inset: 0; border-radius: inherit;
-  background: var(--glass-face);
+  background: radial-gradient(130px 64px at var(--mx, 24%) var(--my, -24%), var(--glass-sheen), transparent 75%), var(--glass-tint);
 }
-.lens-face::after {
-  content: ''; position: absolute; inset: 9px 10px; border-radius: 8px;
-  background: var(--glass-face-veil); filter: blur(4px);
-}
+/* Single hairline rim. Its gradient carries the directional highlight. */
 .glass::before {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background-image: var(--lens-relief); background-size: 100% 100%; z-index: 1;
-}
-.glass .bleed {
-  position: absolute; inset: auto 15px -2px; height: 4px;
-  border-radius: 50%; pointer-events: none; z-index: 1;
-  background: var(--glass-caustic); filter: blur(1.5px); opacity: calc(0.66 * var(--pane-opacity)); transition: opacity 0.35s;
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
+  padding: 1px; background: var(--glass-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
 }
 .glass::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(130px 64px at var(--mx, 24%) var(--my, -24%), var(--glass-sheen), transparent 75%);
-  box-shadow: var(--glass-depth); z-index: 1;
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  box-shadow: var(--glass-shadow);
 }
-.card-t { position: relative; z-index: 2; font-size: 15px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; text-shadow: var(--glass-text-shadow); }
-.card-s { position: relative; z-index: 2; margin-top: 3px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); line-height: 1.3; text-shadow: var(--glass-text-shadow); }
-.card.active .glass::after { box-shadow: var(--glass-depth), 0 0 0 1.5px var(--accent), 0 3px 12px -5px var(--accent); }
-.card.active .card-t { color: var(--accent); }
+.card-t { position: relative; z-index: 2; font-size: 15px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; color: var(--card-title); }
+.card-s { position: relative; z-index: 2; margin-top: 3px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--card-sub); line-height: 1.3; }
+/* Selected: the rim takes the accent. The title stays neutral so it never sinks into
+   same-colored geometry behind it. */
+.card.active .glass::before { background: color-mix(in srgb, var(--accent) 70%, transparent); }
 .card.refresh .card-s {
-  background: linear-gradient(90deg, var(--ink-2) 0 35%, var(--accent) 50%, var(--ink-2) 65% 100%) 0 0 / 300% 100%;
+  background: linear-gradient(90deg, var(--card-sub) 0 35%, var(--accent) 50%, var(--card-sub) 65% 100%) 0 0 / 300% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: sweep 0.9s var(--snap);
 }
