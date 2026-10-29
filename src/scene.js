@@ -221,7 +221,8 @@ export function createScene(canvas) {
     if (kind === 'core') {
       addBox(part, 'accent', [0.9, 0.045, 0.02], [0, 0.18, 0.74]);
       addBox(part, 'accent', [0.02, 0.045, 0.9], [0.74, 0.18, 0]);
-      addBox(part, 'frame', [1.5, 0.08, 1.5], [0, id === 'cu' ? 0.3 : -0.3, 0]);
+      // Band sits 0.03 inside the module's top or bottom face. Flush faces z-fight and flicker.
+      addBox(part, 'frame', [1.5, 0.08, 1.5], [0, id === 'cu' ? 0.27 : -0.27, 0]);
     }
     if (kind === 'board') {
       addBox(part, 'core', [0.34, 0.07, 0.34], [-0.3, 0.06, -0.25]);

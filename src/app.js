@@ -267,9 +267,16 @@ function measureCards() {
   }
 }
 
-// Lens map for the glass: neutral grey inside, and toward the rim red and green encode an inward
-// offset, so the backdrop near the edge is pulled in like light through a thick rounded pane.
-function buildLens(w, h, radius = 16, bezel = 20) {
+// Lens map for the glass. Red and green encode where each pixel samples the backdrop, in pixels:
+// the whole pane magnifies slightly around its center, and a rounded bezel bends light steeply
+// inward near the rim, the way a thick convex pane does. Lines behind the card bow and swell
+// instead of only blurring.
+const LENS_SCALE = 72;
+function buildLens(w, h, radius = 16, bezel = 22) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const MAG = 0.11;
+  const RIM = 24;
   const cv = document.createElement('canvas');
   cv.width = w;
   cv.height = h;
@@ -298,11 +305,14 @@ function buildLens(w, h, radius = 16, bezel = 20) {
         else if (d === py) ny = -1;
         else ny = 1;
       }
-      const t = Math.max(0, 1 - d / bezel);
-      const m = t * t;
+      const t = Math.min(1, Math.max(0, 1 - d / bezel));
+      // Circular bezel: surface slope, and so the bend, rises sharply toward the rim.
+      const bend = RIM * (1 - Math.sqrt(1 - t * t));
+      const ox = -(px - cx) * MAG - nx * bend;
+      const oy = -(py - cy) * MAG - ny * bend;
       const i = (y * w + x) * 4;
-      img.data[i] = 128 - nx * m * 127;
-      img.data[i + 1] = 128 - ny * m * 127;
+      img.data[i] = Math.min(255, Math.max(0, 255 * (ox / LENS_SCALE + 0.5)));
+      img.data[i + 1] = Math.min(255, Math.max(0, 255 * (oy / LENS_SCALE + 0.5)));
       img.data[i + 2] = 128;
       img.data[i + 3] = 255;
     }
@@ -320,9 +330,9 @@ function buildLens(w, h, radius = 16, bezel = 20) {
     'beforeend',
     `<filter id="lens" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
       `<feImage href="${url}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>` +
-      pass(46, [1, 0, 0], 'r') +
-      pass(39, [0, 1, 0], 'g') +
-      pass(32, [0, 0, 1], 'b') +
+      pass(LENS_SCALE * 1.1, [1, 0, 0], 'r') +
+      pass(LENS_SCALE, [0, 1, 0], 'g') +
+      pass(LENS_SCALE * 0.9, [0, 0, 1], 'b') +
       `<feBlend in="r" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="b" mode="screen"/></filter>`,
   );
   html.classList.add('lens');
