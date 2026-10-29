@@ -85,6 +85,8 @@ export function createScene(canvas) {
   controls.minPolarAngle = 0.2;
   controls.maxPolarAngle = 1.48;
   controls.screenSpacePanning = true;
+  // Panning keeps the orbit centre within this radius of the assembly; rotation stays free.
+  controls.maxTargetRadius = 2.6;
   controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 
   // Lights tuned for classic isometric shading: top brightest, left face mid, right face darker.
@@ -621,6 +623,7 @@ export function createScene(canvas) {
     get focusId() {
       return focusId;
     },
+    controls,
     setExploded,
     get exploded() {
       return exploded;

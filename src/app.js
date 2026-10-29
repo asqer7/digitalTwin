@@ -237,7 +237,7 @@ for (const key in CARD_LAYOUT) {
   const c = CARD_LAYOUT[key];
   const el = document.createElement('div');
   el.className = 'card';
-  el.innerHTML = `<div class="glass" style="--ox:${c.side > 0 ? '0%' : '100%'}"><span class="bleed"></span><div class="card-t">${c.title}</div><div class="card-s">${c.sub}</div></div>`;
+  el.innerHTML = `<div class="glass" style="--ox:${c.side > 0 ? '0%' : '100%'}"><span class="lens-window" aria-hidden="true"><span class="lens-backdrop"></span><span class="lens-face"></span></span><span class="bleed" aria-hidden="true"></span><div class="card-t">${c.title}</div><div class="card-s">${c.sub}</div></div>`;
   cardLayer.append(el);
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'leader');
@@ -267,50 +267,55 @@ function measureCards() {
   }
 }
 
-// Lens map for the glass. Red and green encode where each pixel samples the backdrop, in pixels:
-// the whole pane magnifies slightly around its center, and a rounded bezel bends light steeply
-// inward near the rim, the way a thick convex pane does. Lines behind the card bow and swell
-// instead of only blurring.
+// A larger backdrop capture is clipped AFTER refraction. A filter on the card's own
+// border box cannot see the grid or leader just outside it, and produces a clamped rim.
+// Build once per actual size change, never during the moving-card layout loop.
+const LENS_PAD = 32;
 const LENS_SCALE = 72;
-function buildLens(w, h, radius = 16, bezel = 22) {
+let lensSize = '';
+function buildLens(w, h, radius = 16, bezel = 12) {
+  w = Math.round(w);
+  h = Math.round(h);
+  if (!w || !h || lensSize === `${w}:${h}`) return;
+  lensSize = `${w}:${h}`;
   const cx = w / 2;
   const cy = h / 2;
-  const MAG = 0.11;
-  const RIM = 24;
+  const sw = w + LENS_PAD * 2;
+  const sh = h + LENS_PAD * 2;
   const cv = document.createElement('canvas');
-  cv.width = w;
-  cv.height = h;
+  cv.width = sw;
+  cv.height = sh;
   const ctx = cv.getContext('2d');
-  const img = ctx.createImageData(w, h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const px = x + 0.5;
-      const py = y + 0.5;
-      const qx = Math.min(Math.max(px, radius), w - radius);
-      const qy = Math.min(Math.max(py, radius), h - radius);
-      const dx = px - qx;
-      const dy = py - qy;
-      let d;
-      let nx = 0;
-      let ny = 0;
-      if (dx !== 0 && dy !== 0) {
-        const l = Math.hypot(dx, dy);
-        d = radius - l;
-        nx = dx / l;
-        ny = dy / l;
-      } else {
-        d = Math.min(px, w - px, py, h - py);
-        if (d === px) nx = -1;
-        else if (d === w - px) nx = 1;
-        else if (d === py) ny = -1;
-        else ny = 1;
-      }
+  const img = ctx.createImageData(sw, sh);
+  const relief = document.createElement('canvas');
+  relief.width = w;
+  relief.height = h;
+  const reliefCtx = relief.getContext('2d');
+  const reliefImg = reliefCtx.createImageData(w, h);
+  function surface(px, py) {
+    const qx = Math.abs(px - cx) - (cx - radius);
+    const qy = Math.abs(py - cy) - (cy - radius);
+    const ax = Math.max(qx, 0);
+    const ay = Math.max(qy, 0);
+    const len = Math.hypot(ax, ay);
+    const d = radius - len - Math.min(Math.max(qx, qy), 0);
+    const nx = len > 0 ? Math.sign(px - cx) * ax / len : qx > qy ? Math.sign(px - cx) : 0;
+    const ny = len > 0 ? Math.sign(py - cy) * ay / len : qy >= qx ? Math.sign(py - cy) : 0;
+    return { d, nx, ny };
+  }
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const px = x - LENS_PAD + 0.5;
+      const py = y - LENS_PAD + 0.5;
+      const { d, nx, ny } = surface(px, py);
       const t = Math.min(1, Math.max(0, 1 - d / bezel));
-      // Circular bezel: surface slope, and so the bend, rises sharply toward the rim.
-      const bend = RIM * (1 - Math.sqrt(1 - t * t));
-      const ox = -(px - cx) * MAG - nx * bend;
-      const oy = -(py - cy) * MAG - ny * bend;
-      const i = (y * w + x) * 4;
+      // The rolled edge pulls the exterior into the pane, then reverses gently
+      // into its flat face. Thin lines visibly hook and compress across this band.
+      const bend = d >= 0 ? 22 * t * t - 3.5 * Math.exp(-(((d - 9) / 3) ** 2)) : 0;
+      const mag = d >= 0 ? 0.065 * Math.min(1, Math.max(0, d / bezel)) : 0;
+      const ox = -(px - cx) * mag + nx * bend;
+      const oy = -(py - cy) * mag + ny * bend;
+      const i = (y * sw + x) * 4;
       img.data[i] = Math.min(255, Math.max(0, 255 * (ox / LENS_SCALE + 0.5)));
       img.data[i + 1] = Math.min(255, Math.max(0, 255 * (oy / LENS_SCALE + 0.5)));
       img.data[i + 2] = 128;
@@ -319,22 +324,44 @@ function buildLens(w, h, radius = 16, bezel = 22) {
   }
   ctx.putImageData(img, 0, 0);
   const url = cv.toDataURL();
+  // Neutral Fresnel relief, tied to the same rounded-surface normals as the
+  // displacement. No painted rainbow: chromatic edges come from the scene.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const { d, nx, ny } = surface(x + 0.5, y + 0.5);
+      if (d < 0) continue;
+      const light = Math.max(0, -nx * 0.55 - ny * 0.83);
+      const lip = Math.exp(-(((d - 0.9) / 0.65) ** 2)) * (0.45 + light * 0.46);
+      const shoulder = Math.exp(-(((d - 4.8) / 2.1) ** 2)) * (0.16 + (1 - light) * 0.12);
+      const inner = Math.exp(-(((d - 8.3) / 1.25) ** 2)) * (0.12 + light * 0.16);
+      const white = lip + inner;
+      const alpha = Math.min(1, white + shoulder);
+      const value = Math.round((white * 255 + shoulder * 28) / Math.max(alpha, 0.001));
+      const i = (y * w + x) * 4;
+      reliefImg.data[i] = reliefImg.data[i + 1] = reliefImg.data[i + 2] = value;
+      reliefImg.data[i + 3] = Math.round(alpha * 255);
+    }
+  }
+  reliefCtx.putImageData(reliefImg, 0, 0);
+  html.style.setProperty('--lens-relief', `url("${relief.toDataURL()}")`);
+  html.style.setProperty('--lens-pad', `${LENS_PAD}px`);
   const channel = (r, g, b) => `${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0`;
   const pass = (scale, mask, name) =>
-    `<feDisplacementMap in="SourceGraphic" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G" result="d${name}"/>` +
+    `<feDisplacementMap in="detail" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G" result="d${name}"/>` +
     `<feColorMatrix in="d${name}" type="matrix" values="${channel(...mask)}" result="${name}"/>`;
-  const old = document.getElementById('lens');
-  if (old) old.remove();
   const defs = document.querySelector('svg[aria-hidden]');
-  defs.insertAdjacentHTML(
-    'beforeend',
-    `<filter id="lens" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
-      `<feImage href="${url}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>` +
-      pass(LENS_SCALE * 1.1, [1, 0, 0], 'r') +
+  for (const [id, pivot, gain] of [['lens', [240 / 255, 238 / 255, 230 / 255], 1.5], ['lens-wire', [3 / 255, 6 / 255, 6 / 255], 1.55]]) {
+    document.getElementById(id)?.remove();
+    const transfer = ['R', 'G', 'B'].map((c, i) => `<feFunc${c} type="linear" slope="${gain}" intercept="${pivot[i] * (1 - gain)}"/>`).join('');
+    defs.insertAdjacentHTML('beforeend',
+      `<filter id="${id}" x="0" y="0" width="${sw}" height="${sh}" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
+      `<feComponentTransfer in="SourceGraphic" result="detail">${transfer}</feComponentTransfer>` +
+      `<feImage href="${url}" x="0" y="0" width="${sw}" height="${sh}" preserveAspectRatio="none" result="map"/>` +
+      pass(LENS_SCALE * 1.025, [1, 0, 0], 'r') +
       pass(LENS_SCALE, [0, 1, 0], 'g') +
-      pass(LENS_SCALE * 0.9, [0, 0, 1], 'b') +
-      `<feBlend in="r" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="b" mode="screen"/></filter>`,
-  );
+      pass(LENS_SCALE * 0.975, [0, 0, 1], 'b') +
+      `<feBlend in="r" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="b" mode="screen"/></filter>`);
+  }
   html.classList.add('lens');
 }
 
@@ -342,6 +369,10 @@ document.fonts.ready.then(() => {
   measureCards();
   const c = Object.values(cards)[0];
   buildLens(c.glass.offsetWidth, c.glass.offsetHeight);
+  new ResizeObserver(() => {
+    measureCards();
+    buildLens(c.glass.offsetWidth, c.glass.offsetHeight);
+  }).observe(c.glass);
 });
 window.addEventListener('resize', measureCards);
 measureCards();
