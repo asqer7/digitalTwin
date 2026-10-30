@@ -1,6 +1,6 @@
 {
   "name": "aas-twin-mockup",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "AAS digital twin showcase mockup",
   "main": "main.js",
   "scripts": {

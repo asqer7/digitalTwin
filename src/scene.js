@@ -227,9 +227,9 @@ export function createScene(canvas) {
       addBox(part, 'frame', [1.5, 0.08, 1.5], [0, id === 'cu' ? 0.27 : -0.27, 0]);
     }
     if (kind === 'board') {
-      addBox(part, 'core', [0.34, 0.07, 0.34], [-0.3, 0.06, -0.25]);
-      addBox(part, 'core', [0.22, 0.06, 0.44], [0.32, 0.055, 0.1]);
-      addBox(part, 'accent', [0.08, 0.05, 0.08], [-0.55, 0.05, 0.55]);
+      addBox(part, 'core', [0.34, 0.025, 0.34], [-0.3, 0.0375, -0.25]);
+      addBox(part, 'core', [0.22, 0.025, 0.44], [0.32, 0.0375, 0.1]);
+      addBox(part, 'accent', [0.08, 0.025, 0.08], [-0.55, 0.0375, 0.55]);
     }
 
     part.group.position.copy(part.rest);
@@ -437,10 +437,16 @@ export function createScene(canvas) {
     saved = null;
   }
 
+  let explodeEpoch = 0;
   function setExploded(on) {
     exploded = on;
     const order = on ? parts : [...parts].reverse();
-    order.forEach((p, i) => setTimeout(() => (p.s.t = exploded ? 1 : 0), i * 26));
+    const epoch = ++explodeEpoch;
+    order.forEach((p, i) =>
+      setTimeout(() => {
+        if (epoch === explodeEpoch) p.s.t = on ? 1 : 0;
+      }, i * 26),
+    );
   }
 
   function select(id) {
@@ -539,6 +545,35 @@ export function createScene(canvas) {
     return anchorOut;
   }
 
+  // Share of inward speed a part keeps when it lands in its seat and rebounds outward.
+  const SEAT_RESTITUTION = 0.65;
+
+  // Acyclic seating constraints for these box geometries, in assembly units.
+  const freeParts = parts.filter((p) => !['cu', 'base', 'top'].includes(p.id));
+  const panels = ['px', 'pz', 'nx', 'nz'].map((id) => partById[id]);
+  function advanceAssembly(dt) {
+    const n = Math.max(1, Math.ceil(dt / (1 / 240)));
+    const h = dt / n;
+    if (h <= 0) return;
+    const advance = (p, min = 0) => {
+      const velocity = (min - (p.seatMin ?? 0)) / h;
+      p.s.step(h, { min, velocity, restitution: SEAT_RESTITUTION });
+      p.seatMin = min;
+    };
+    for (let i = 0; i < n; i++) {
+      freeParts.forEach((p) => advance(p));
+      // Board components end at y = 0.05 + 0.08 * bd.s.x.
+      advance(partById.cu, Math.max(0, (0.08 * partById.bd.s.x - 0.01) / 0.3));
+      advance(partById.base, Math.max(0, (0.1 * partById.cl.s.x - 0.06) / 0.3));
+      let ceiling = 0.74 + 0.3 * partById.cu.s.x;
+      for (const p of panels) {
+        const angle = Math.abs(p.tilt[1]) * Math.min(p.s.x, 1.4);
+        ceiling = Math.max(ceiling, 0.02 * p.s.x + 0.8 * Math.cos(angle) + 0.04 * Math.sin(angle));
+      }
+      advance(partById.top, Math.max(0, (ceiling - 0.8) / 0.62));
+    }
+  }
+
   // Frame loop
   let last = performance.now();
   let frameCb = null;
@@ -566,9 +601,11 @@ export function createScene(canvas) {
     root.scale.setScalar(rs);
     bob.position.y = Math.sin(t * 1.15) * 0.03;
 
+    advanceAssembly(dt);
     for (const p of parts) {
-      const s = p.s.step(dt);
-      const sc = Math.max(0.001, p.scale.step(dt));
+      const s = p.s.x;
+      // A shared root can bounce in scale; individual solids cannot grow into neighbors.
+      const sc = Math.max(0.001, Math.min(1, p.scale.step(dt)));
       p.group.position.copy(p.rest).addScaledVector(p.ex, s);
       p.group.scale.setScalar(sc);
       if (p.tilt) p.group.rotation[p.tilt[0]] = p.tilt[1] * Math.min(s, 1.4);
