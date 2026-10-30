@@ -376,6 +376,8 @@ function layoutCards() {
 
 /* Panels: collapse to their header so the toggle never moves */
 const range = document.createRange();
+const panelAnims = new Map();
+
 function measurePanels() {
   for (const panel of document.querySelectorAll('.panel')) {
     const head = panel.querySelector('.panel-head');
@@ -389,16 +391,70 @@ function measurePanels() {
     const w = widths.reduce((a, b) => a + b, 0) + parseFloat(cs.columnGap || 8) * (kids.length - 1) + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 2;
     panel.style.setProperty('--cw', `${Math.ceil(w)}px`);
   }
+  // Content height depends on width (the metric header wraps in a narrow pill), so the open
+  // height is only measured while the panel is open at full width; collapsed keeps the last value.
   const right = $('#panel-right');
+  if (right.classList.contains('collapsed') || panelAnims.has(right)) return;
   const openH = right.querySelector('.panel-head').offsetHeight + right.querySelector('.panel-body').scrollHeight + 2;
   right.style.setProperty('--open-h', `${openH}px`);
+}
+
+// Panels resize on the shell's --spring curve, run here so the collapse can be bounded: any
+// undershoot below the collapsed header is rubber-banded to a few pixels, so the pill still
+// bounces but never clips its own title. Expanding keeps the full overshoot.
+function cubicBezier(x1, y1, x2, y2) {
+  const bx = (t) => 3 * x1 * t * (1 - t) ** 2 + 3 * x2 * t * t * (1 - t) + t ** 3;
+  const dbx = (t) => 3 * x1 * (1 - t) ** 2 + 6 * (x2 - x1) * t * (1 - t) + 3 * (1 - x2) * t * t;
+  const by = (t) => 3 * y1 * t * (1 - t) ** 2 + 3 * y2 * t * t * (1 - t) + t ** 3;
+  return (x) => {
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const d = dbx(t);
+      if (Math.abs(d) < 1e-6) break;
+      t = Math.min(1, Math.max(0, t - (bx(t) - x) / d));
+    }
+    return by(t);
+  };
+}
+const PANEL_CURVE = cubicBezier(0.34, 1.56, 0.64, 1);
+const PANEL_MS = 600;
+const rubber = (v, floor, r) => (v >= floor ? v : floor - r * (1 - Math.exp((v - floor) / r)));
+
+function resizePanel(panel, collapse) {
+  const from = [panel.offsetWidth, panel.offsetHeight];
+  cancelAnimationFrame(panelAnims.get(panel));
+  panel.style.width = panel.style.height = '';
+  panel.classList.toggle('collapsed', collapse);
+  const to = [panel.offsetWidth, panel.offsetHeight];
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / PANEL_MS);
+    const e = PANEL_CURVE(p);
+    let w = from[0] + (to[0] - from[0]) * e;
+    let h = from[1] + (to[1] - from[1]) * e;
+    if (collapse) {
+      w = rubber(w, to[0], 5);
+      h = rubber(h, to[1], 4);
+    }
+    panel.style.width = `${w.toFixed(2)}px`;
+    panel.style.height = `${h.toFixed(2)}px`;
+    if (p < 1) panelAnims.set(panel, requestAnimationFrame(step));
+    else {
+      panel.style.width = panel.style.height = '';
+      panelAnims.delete(panel);
+    }
+  };
+  panel.style.width = `${from[0]}px`;
+  panel.style.height = `${from[1]}px`;
+  panelAnims.set(panel, requestAnimationFrame(step));
 }
 
 function togglePanel(side, force) {
   const panel = $(`#panel-${side}`);
   const collapse = force ?? !panel.classList.contains('collapsed');
+  if (collapse === panel.classList.contains('collapsed')) return;
   measurePanels();
-  panel.classList.toggle('collapsed', collapse);
+  resizePanel(panel, collapse);
   const btn = panel.querySelector('.panel-tog');
   btn.setAttribute('aria-expanded', String(!collapse));
   const name = side === 'left' ? 'assembly' : 'inspector';
